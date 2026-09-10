@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+python-multipart
+networkx
+groq
+google-generativeai
+PyJWT
+python-dotenv
