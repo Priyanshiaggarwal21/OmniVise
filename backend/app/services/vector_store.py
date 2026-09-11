@@ -414,5 +414,23 @@ def search_evidence(
     return results
 
 
+def purge_ephemeral_embeddings() -> int:
+    """Purge temporary/session indexed points from Qdrant vector store and restore benchmark state."""
+    _ensure_collection()
+    purged_count = 0
+    try:
+        col_info = qdrant.get_collection(COLLECTION_NAME)
+        total_points = col_info.points_count or 0
+        qdrant.delete_collection(COLLECTION_NAME)
+        _ensure_collection()
+        seed_initial_evidence()
+        new_info = qdrant.get_collection(COLLECTION_NAME)
+        purged_count = max(0, total_points - (new_info.points_count or 0))
+    except Exception as exc:
+        print(f"Warning during vector store purge: {exc}")
+    return purged_count
+
+
 # Seed benchmark records upon module import
 seed_initial_evidence()
+

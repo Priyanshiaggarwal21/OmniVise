@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.activity import log_activity
 from app.api.v1.notifications import notify_affected_decisions
 from app.core.database import get_db
+from app.models.evidence import EvidenceRecord
 from app.schemas import EvidenceObject, Provenance
 from app.services.parsers import parse_evidence
 from app.services.vector_store import index_evidence
@@ -131,6 +132,30 @@ async def upload_evidence(
 
     source_name = file.filename if (has_file and file and file.filename) else (url or "Uploaded Evidence")
 
+    # Persist in encrypted database table (claim, raw_text_preview, provenance, metadata encrypted at-rest)
+    try:
+        session_id = request.headers.get("X-Session-ID") or request.query_params.get("session_id")
+        record = EvidenceRecord(
+            id=evidence_obj.id,
+            source=evidence_obj.source,
+            modality=evidence_obj.modality,
+            claim=evidence_obj.claim,
+            entity=evidence_obj.entity,
+            value=evidence_obj.value,
+            date=evidence_obj.date,
+            location=evidence_obj.location,
+            file_hash=file_hash,
+            file_size_bytes=file_size,
+            session_id=session_id,
+            raw_text_preview=evidence_obj.raw_text_preview,
+            provenance=provenance.model_dump(),
+            metadata_blob=evidence_obj.metadata,
+        )
+        db.add(record)
+        db.commit()
+    except Exception:
+        db.rollback()
+
     # Trigger notification pipeline for affected Decision Snapshots
     try:
         notify_affected_decisions(db, source_name)
@@ -149,3 +174,62 @@ async def upload_evidence(
         pass
 
     return evidence_obj
+
+
+@router.get("/")
+def list_evidence(
+    session_id: Optional[str] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    """Retrieve evidence records with transparent at-rest field decryption."""
+    query = db.query(EvidenceRecord)
+    if session_id:
+        query = query.filter(EvidenceRecord.session_id == session_id)
+    records = query.order_by(EvidenceRecord.created_at.desc()).limit(limit).all()
+    return [
+        {
+            "id": r.id,
+            "source": r.source,
+            "modality": r.modality,
+            "claim": r.claim,
+            "entity": r.entity,
+            "value": r.value,
+            "date": r.date,
+            "location": r.location,
+            "file_hash": r.file_hash,
+            "file_size_bytes": r.file_size_bytes,
+            "session_id": r.session_id,
+            "raw_text_preview": r.raw_text_preview,
+            "provenance": r.provenance,
+            "metadata": r.metadata_blob,
+            "created_at": r.created_at,
+        }
+        for r in records
+    ]
+
+
+@router.get("/{evidence_id}")
+def get_evidence(evidence_id: str, db: Session = Depends(get_db)):
+    """Retrieve a single evidence record by ID, transparently decrypted."""
+    record = db.query(EvidenceRecord).filter(EvidenceRecord.id == evidence_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Evidence record not found")
+    return {
+        "id": record.id,
+        "source": record.source,
+        "modality": record.modality,
+        "claim": record.claim,
+        "entity": record.entity,
+        "value": record.value,
+        "date": record.date,
+        "location": record.location,
+        "file_hash": record.file_hash,
+        "file_size_bytes": record.file_size_bytes,
+        "session_id": record.session_id,
+        "raw_text_preview": record.raw_text_preview,
+        "provenance": record.provenance,
+        "metadata": record.metadata_blob,
+        "created_at": record.created_at,
+    }
+

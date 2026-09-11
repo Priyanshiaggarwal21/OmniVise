@@ -448,4 +448,16 @@ def get_claim(claim_id: str) -> Optional[ExtractedClaim]:
     return next((c for c in claims if c.id == claim_id), None)
 
 
+def purge_session_store() -> dict:
+    """Clear non-seeded session documents, claims, discrepancies, and events."""
+    with _lock:
+        claims.clear()
+        documents.clear()
+        discrepancies.clear()
+        events.clear()
+        seed()
+    return {"status": "purged", "message": "In-memory session store reset to clean baseline."}
+
+
 seed()
+

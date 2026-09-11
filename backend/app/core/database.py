@@ -23,9 +23,29 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+def ensure_db_schema():
+    """Ensure any newly added columns exist in the SQLite database without requiring recreation."""
+    try:
+        from sqlalchemy import inspect, text
+        inspector = inspect(engine)
+        if "users" in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns("users")]
+            with engine.connect() as conn:
+                if "vault_pin_hash" not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN vault_pin_hash VARCHAR"))
+                if "vault_failed_attempts" not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN vault_failed_attempts INTEGER DEFAULT 0"))
+                if "vault_locked_until" not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN vault_locked_until DATETIME"))
+                conn.commit()
+    except Exception as exc:
+        print(f"Warning during DB schema sync: {exc}")
+
+
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
+

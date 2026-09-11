@@ -219,3 +219,35 @@ class EvidenceObject(BaseModel):
     provenance: Provenance
     raw_text_preview: Optional[str] = None
     metadata: dict = Field(default_factory=dict)
+
+
+# ==========================================
+# Memory Vault Schemas
+# ==========================================
+class VaultSetupPinRequest(BaseModel):
+    pin: str = Field(..., min_length=4, max_length=6, description="4 to 6 digit numeric PIN")
+
+
+class VaultUnlockRequest(BaseModel):
+    pin: str = Field(..., min_length=4, max_length=6, description="4 to 6 digit numeric PIN")
+
+
+class VaultResetPinRequest(BaseModel):
+    password: str = Field(..., min_length=1, description="Account password for identity verification")
+    new_pin: str = Field(..., min_length=4, max_length=6, description="New 4 to 6 digit numeric PIN")
+
+
+class VaultStatusResponse(BaseModel):
+    has_pin: bool
+    is_locked: bool
+    locked_until: Optional[datetime] = None
+    remaining_attempts: int
+    lockout_seconds_remaining: Optional[int] = None
+
+
+class VaultUnlockResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in_minutes: int = 15
+    message: str = "Vault unlocked successfully"
+

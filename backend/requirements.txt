@@ -16,3 +16,5 @@ python-pptx
 pandas
 openpyxl
 reportlab
+pytest
+psycopg2-binary

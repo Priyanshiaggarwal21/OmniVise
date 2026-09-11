@@ -9,6 +9,7 @@ from app.api.v1.activity import log_activity
 from app.contradiction import analyze_evidence_relationships
 from app.core.database import get_db
 from app.services import decomposer, vector_store
+from app.services.cleanup import purge_session_data
 from app.services.synthesizer import generate_grounded_answer, run_stress_test
 
 router = APIRouter()
@@ -279,3 +280,33 @@ async def workspace_stress_test(
             status_code=500,
             detail=f"Stress test execution failed: {exc}",
         )
+
+
+@router.post("/purge-session")
+def purge_session(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Purge Session Data endpoint.
+    Deletes all temporary files, intermediate extraction artifacts, temp embeddings,
+    and cached screen frames from the session, returning a detailed summary.
+    """
+    session_id = request.headers.get("X-Session-ID") or request.query_params.get("session_id")
+    result = purge_session_data(session_id=session_id)
+
+    try:
+        log_activity(
+            db,
+            action_type="session_purged",
+            target="Workspace session data and cache purged",
+            details={
+                "deleted_files": result.get("deleted_files_count"),
+                "embeddings_purged": result.get("embeddings_purged"),
+            },
+        )
+    except Exception:
+        pass
+
+    return result
+
