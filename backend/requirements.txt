@@ -7,3 +7,12 @@ groq
 google-generativeai
 PyJWT
 python-dotenv
+sqlalchemy
+passlib
+bcrypt
+pymupdf
+python-docx
+python-pptx
+pandas
+openpyxl
+reportlab

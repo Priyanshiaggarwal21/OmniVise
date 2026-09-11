@@ -2,9 +2,13 @@ from typing import List
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
+from app.api.v1.activity import log_activity
+from app.api.v1.notifications import notify_affected_decisions
 from app.auth import require_write
 from app.contradiction import detect_contradictions, extract_claims
+from app.core.database import get_db
 from app.schemas import DocumentPage, ExtractedClaim, IngestedDocument
 from app import store
 
@@ -17,7 +21,11 @@ def _pages_from_text(text: str) -> List[DocumentPage]:
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...), _user: dict = Depends(require_write)):
+async def upload_file(
+    file: UploadFile = File(...),
+    _user: dict = Depends(require_write),
+    db: Session = Depends(get_db),
+):
     content = await file.read()
     text_content = content.decode("utf-8", errors="ignore")
     filename = file.filename or "untitled.txt"
@@ -43,6 +51,20 @@ async def upload_file(file: UploadFile = File(...), _user: dict = Depends(requir
         ai_engine=f"{ai_status} | contradictions: {contradiction_engine}",
     )
     store.upsert_document(document)
+
+    # Trigger notification pipeline and activity log for affected Decision Snapshots
+    try:
+        user_id = _user.get("user_id") if isinstance(_user, dict) else None
+        notify_affected_decisions(db, filename, claims_count=len(persisted), user_id=user_id)
+        log_activity(
+            db,
+            action_type="evidence_uploaded",
+            target=filename,
+            user_id=user_id,
+            details={"claims_count": len(persisted), "doc_id": doc_id},
+        )
+    except Exception:
+        pass
 
     return {
         "filename": filename,

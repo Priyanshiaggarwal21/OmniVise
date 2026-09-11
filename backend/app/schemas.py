@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -110,6 +111,51 @@ class StatsResponse(BaseModel):
     sources: int
 
 
+class AppRole(str, Enum):
+    analyst = "analyst"
+    reviewer = "reviewer"
+    admin = "admin"
+    executive = "executive"
+
+
+class UserSignupRequest(BaseModel):
+    name: Optional[str] = None
+    email: str
+    phone: Optional[str] = None
+    password: str
+    role: Optional[str] = "analyst"
+    username: Optional[str] = None
+
+
+class UserLoginRequest(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    identifier: Optional[str] = None
+    username: Optional[str] = None
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    phone: Optional[str] = None
+    role: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    role: str
+    user: UserResponse
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -147,3 +193,29 @@ class GraphEdge(BaseModel):
 class GraphResponse(BaseModel):
     nodes: List[GraphNode]
     edges: List[GraphEdge]
+
+
+class Provenance(BaseModel):
+    file_name: str
+    file_hash: str
+    temp_path: Optional[str] = None
+    parser_used: str
+    file_size_bytes: int
+    mime_type: str
+    ingested_at: str
+    storage_type: str = "ephemeral_temp"
+
+
+class EvidenceObject(BaseModel):
+    id: str = Field(default_factory=lambda: f"ev-{uuid4().hex[:8]}")
+    source: str
+    modality: str
+    claim: str
+    entity: Optional[str] = None
+    value: Optional[float] = None
+    date: Optional[str] = None
+    version: str = "1.0"
+    location: Optional[str] = None
+    provenance: Provenance
+    raw_text_preview: Optional[str] = None
+    metadata: dict = Field(default_factory=dict)
